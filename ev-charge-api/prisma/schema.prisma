@@ -1,0 +1,160 @@
+// Prisma Schema — EV Charging Sharing Platform
+// PostgreSQL + PostGIS via Supabase
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────── ENUMS ───────────────────────────────
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
+
+enum Role {
+  DRIVER
+  HOST
+  ADMIN
+}
+
+enum StationType {
+  HOUSEHOLD
+  PUBLIC
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum SubStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─────────────────────────────── MODELS ──────────────────────────────
+
+model User {
+  id                String    @id @default(uuid())
+  name              String
+  phone             String?   @unique
+  email             String    @unique
+  passwordHash      String?
+  authProvider      AuthProvider @default(LOCAL)
+  googleId          String?   @unique
+  role              Role      @default(DRIVER)
+  cnicImageUrl      String?
+  cnicNumber        String?
+  isVerified        Boolean   @default(false)
+  refreshTokenHash  String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  stations          Station[]
+  bookings          Booking[]
+  sentMessages      Message[]      @relation("sender")
+  receivedMessages  Message[]      @relation("receiver")
+  subscriptions     Subscription[]
+  auditLogs         AuditLog[]
+}
+
+model Station {
+  id                 String             @id @default(uuid())
+  host               User               @relation(fields: [hostId], references: [id])
+  hostId             String
+  stationType        StationType
+  stationName        String
+  latitude           Float
+  longitude          Float
+  address            String
+  capacity           String
+  connectorType      String
+  pricePerKwh        Float
+  photos             String[]
+  isAvailable        Boolean            @default(true)
+  verificationStatus VerificationStatus @default(PENDING)
+  subscriptionExpiry DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  bookings           Booking[]
+  messages           Message[]
+
+  // Geospatial geography column added via raw SQL migration (PostGIS)
+  // geog geography(Point, 4326) — GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography) STORED
+}
+
+model Booking {
+  id           String        @id @default(uuid())
+  driver       User          @relation(fields: [driverId], references: [id])
+  driverId     String
+  station      Station       @relation(fields: [stationId], references: [id])
+  stationId    String
+  date         DateTime
+  timeSlot     String
+  status       BookingStatus @default(PENDING)
+  unitsCharged Float?
+  totalAmount  Float?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Subscription {
+  id            String    @id @default(uuid())
+  host          User      @relation(fields: [hostId], references: [id])
+  hostId        String
+  amount        Float
+  transactionId String
+  screenshotUrl String
+  status        SubStatus @default(PENDING)
+  approvedBy    String?
+  validTill     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationId String
+  sender         User     @relation("sender", fields: [senderId], references: [id])
+  senderId       String
+  receiver       User     @relation("receiver", fields: [receiverId], references: [id])
+  receiverId     String
+  station        Station  @relation(fields: [stationId], references: [id])
+  stationId      String
+  text           String
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  admin      User     @relation(fields: [adminId], references: [id])
+  adminId    String
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([adminId, createdAt])
+  @@index([targetType, targetId])
+}
