@@ -18,4 +18,4 @@ COPY prisma ./prisma
 
 ENV NODE_ENV=production
 EXPOSE 3001
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/main"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss || true; node dist/main"]
