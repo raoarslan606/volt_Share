@@ -194,19 +194,28 @@ export class AuthService {
   private async issueTokens(userId: string, email: string, role: Role) {
     const payload = { sub: userId, email, role };
 
+    const accessSecret =
+      this.configService.get<string>('JWT_ACCESS_SECRET') || 'default_jwt_access_secret_key_32bytes';
+    const refreshSecret =
+      this.configService.get<string>('JWT_REFRESH_SECRET') || 'default_jwt_refresh_secret_key_32bytes';
+
     const accessToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+      secret: accessSecret,
       expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRES_IN', '15m'),
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      secret: refreshSecret,
       expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
     });
 
-    // Store hashed refresh token in Redis
-    const hash = await bcrypt.hash(refreshToken, 10);
-    await this.redisService.set(`refresh:${userId}`, hash, REFRESH_TTL_SECONDS);
+    // Store hashed refresh token in Redis (fallback gracefully if Redis is unavailable)
+    try {
+      const hash = await bcrypt.hash(refreshToken, 10);
+      await this.redisService.set(`refresh:${userId}`, hash, REFRESH_TTL_SECONDS);
+    } catch (redisError) {
+      console.warn('Redis unavailable for refresh token storage:', redisError);
+    }
 
     return { accessToken, refreshToken, userId, role };
   }

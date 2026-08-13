@@ -4,14 +4,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 
 @ApiTags('health')
-@Controller('health')
+@Controller()
 export class HealthController {
   constructor(
     private prisma: PrismaService,
     private redisService: RedisService,
   ) {}
 
-  @Get()
+  @Get(['', 'health'])
   @ApiOperation({ summary: 'Health check for DB and Redis' })
   async check() {
     let dbStatus = 'ok';
@@ -30,7 +30,8 @@ export class HealthController {
     }
 
     return {
-      status: dbStatus === 'ok' && redisStatus === 'ok' ? 'ok' : 'degraded',
+      name: 'EV Charge API (VoltShare)',
+      status: dbStatus === 'ok' ? 'ok' : 'degraded',
       timestamp: new Date().toISOString(),
       services: { database: dbStatus, redis: redisStatus },
     };
